@@ -1137,7 +1137,7 @@ export default function IssuesPage() {
           <main className="flex-1 min-w-0">
             {/* Search and Sort */}
             <div className="mb-6">
-              <div className="flex gap-3">
+            <div className="flex gap-3 items-stretch">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
                   <Input
@@ -1145,11 +1145,11 @@ export default function IssuesPage() {
                     placeholder="Search issues..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10 h-11"
+                    className="pl-10 !h-[44px]"
                   />
                 </div>
                 <Select value={sortOption} onValueChange={(value) => setSortOption(value as SortOption)}>
-                  <SelectTrigger className="w-[160px] h-[44px]">
+                  <SelectTrigger className="w-[160px] !h-[44px]">
                     <SelectValue placeholder="Sort by" />
                   </SelectTrigger>
                   <SelectContent>
