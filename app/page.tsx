@@ -2,8 +2,17 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Drawer,
   DrawerClose,
@@ -25,6 +34,14 @@ import {
   AlertCircle,
   Plus,
   Check,
+  Bold,
+  Italic,
+  List,
+  ListOrdered,
+  Code,
+  Link2,
+  Heading2,
+  Quote,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -54,6 +71,7 @@ interface GitHubIssue {
 }
 
 type FilterState = "all" | "open" | "closed";
+type SortOption = "newest" | "oldest" | "number-asc" | "number-desc" | "alpha-asc" | "alpha-desc";
 
 // Category tabs configuration
 const CATEGORY_TABS = [
@@ -284,177 +302,309 @@ function IssueDrawer({
       .slice(0, 8);
   }, [labels, labelSearch, selectedLabels]);
 
+  const textareaRef = useCallback((node: HTMLTextAreaElement | null) => {
+    if (node) {
+      node.focus();
+    }
+  }, []);
+
+  const insertMarkdown = (prefix: string, suffix: string = "") => {
+    const textarea = document.querySelector("textarea") as HTMLTextAreaElement;
+    if (!textarea) return;
+    
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = body.substring(start, end);
+    const newText = body.substring(0, start) + prefix + selectedText + suffix + body.substring(end);
+    setBody(newText);
+    
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + prefix.length, end + prefix.length);
+    }, 0);
+  };
+
   if (!issue) return null;
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="max-h-[90vh]">
-        <div className="mx-auto w-full max-w-6xl overflow-y-auto px-4">
-          <DrawerHeader className="text-left px-0">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
+      <DrawerContent className="max-h-[85vh]">
+        <div className="w-full">
+          {/* Header */}
+          <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-zinc-200 dark:border-zinc-800">
+            <div className="flex-1 min-w-0 pr-6">
+              {isEditing ? (
+                <Input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  className="text-xl font-semibold mb-2"
+                  placeholder="Issue title"
+                />
+              ) : (
+                <h2 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 mb-2">
+                  {issue.title}
+                </h2>
+              )}
+
+              <div className="flex items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
                 {issue.state === "open" ? (
-                  <CircleDot className="w-5 h-5 text-green-500" />
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+                    <CircleDot className="w-3.5 h-3.5" />
+                    Open
+                  </span>
                 ) : (
-                  <CheckCircle2 className="w-5 h-5 text-purple-500" />
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Closed
+                  </span>
                 )}
-                <span className="text-zinc-400 dark:text-zinc-500">
-                  #{issue.number}
-                </span>
+                <span>#{issue.number}</span>
+                <span>•</span>
+                <img
+                  src={issue.user.avatar_url}
+                  alt={issue.user.login}
+                  className="w-5 h-5 rounded-full"
+                />
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">{issue.user.login}</span>
+                <span>•</span>
+                <span>{formatDate(issue.created_at)}</span>
               </div>
+            </div>
+
+            <div className="flex items-center gap-3 flex-shrink-0">
+              <a
+                href={issue.html_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300 flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              >
+                <ExternalLink className="w-4 h-4" />
+                View on GitHub
+              </a>
               <DrawerClose asChild>
                 <Button variant="ghost" size="icon">
-                  <X className="w-4 h-4" />
+                  <X className="w-5 h-5" />
                 </Button>
               </DrawerClose>
             </div>
+          </div>
 
-            {isEditing ? (
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                className="text-xl font-semibold mt-2"
-              />
-            ) : (
-              <DrawerTitle className="text-xl font-semibold mt-2">
-                {issue.title}
-              </DrawerTitle>
-            )}
-
-            <DrawerDescription className="flex items-center gap-2 mt-2">
-              <img
-                src={issue.user.avatar_url}
-                alt={issue.user.login}
-                className="w-5 h-5 rounded-full"
-              />
-              <span>{issue.user.login}</span>
-              <span>•</span>
-              <span>{formatDate(issue.created_at)}</span>
-            </DrawerDescription>
-          </DrawerHeader>
-
-          <div className="pb-4">
-            {/* Labels */}
-            <div className="mb-4">
-              <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-                Labels
-              </h4>
-              
-              {isEditing ? (
-                <div className="space-y-3">
-                  {/* Selected labels */}
-                  <div className="flex flex-wrap gap-2">
-                    {selectedLabels.map((labelName) => {
-                      const label = labels.find((l) => l.name === labelName);
-                      const isCategory = CATEGORY_LABEL_NAMES.includes(labelName);
-                      return (
-                        <button
-                          key={labelName}
-                          onClick={() => toggleLabel(labelName)}
-                          className={cn(
-                            "inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-all",
-                            isCategory && "ring-2 ring-offset-1"
-                          )}
-                          style={{
-                            backgroundColor: label ? `#${label.color}20` : "#71717a20",
-                            color: label ? `#${label.color}` : "#71717a",
-                            border: label ? `1px solid #${label.color}40` : "1px solid #71717a40",
-                          }}
-                        >
-                          {labelName}
-                          <X className="w-3 h-3" />
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Label search */}
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                    <Input
-                      type="text"
-                      placeholder="Search labels to add..."
-                      value={labelSearch}
-                      onChange={(e) => setLabelSearch(e.target.value)}
-                      className="pl-10 h-9 text-sm"
+          {/* Content */}
+          <div className="flex gap-6 p-6 max-h-[calc(85vh-200px)] overflow-y-auto">
+            {/* Main content */}
+            <div className="flex-1 min-w-0">
+              <div className="mb-6">
+                {isEditing ? (
+                  <div className="space-y-2">
+                    {/* Markdown toolbar */}
+                    <div className="flex items-center gap-1 p-2 rounded-t-lg border border-b-0 border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50">
+                      <button
+                        type="button"
+                        onClick={() => insertMarkdown("**", "**")}
+                        className="p-1.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400"
+                        title="Bold"
+                      >
+                        <Bold className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => insertMarkdown("_", "_")}
+                        className="p-1.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400"
+                        title="Italic"
+                      >
+                        <Italic className="w-4 h-4" />
+                      </button>
+                      <div className="w-px h-5 bg-zinc-300 dark:bg-zinc-600 mx-1" />
+                      <button
+                        type="button"
+                        onClick={() => insertMarkdown("## ")}
+                        className="p-1.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400"
+                        title="Heading"
+                      >
+                        <Heading2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => insertMarkdown("> ")}
+                        className="p-1.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400"
+                        title="Quote"
+                      >
+                        <Quote className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => insertMarkdown("`", "`")}
+                        className="p-1.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400"
+                        title="Code"
+                      >
+                        <Code className="w-4 h-4" />
+                      </button>
+                      <div className="w-px h-5 bg-zinc-300 dark:bg-zinc-600 mx-1" />
+                      <button
+                        type="button"
+                        onClick={() => insertMarkdown("- ")}
+                        className="p-1.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400"
+                        title="Bullet list"
+                      >
+                        <List className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => insertMarkdown("1. ")}
+                        className="p-1.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400"
+                        title="Numbered list"
+                      >
+                        <ListOrdered className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => insertMarkdown("[", "](url)")}
+                        className="p-1.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400"
+                        title="Link"
+                      >
+                        <Link2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => insertMarkdown("- [ ] ")}
+                        className="p-1.5 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400"
+                        title="Task list"
+                      >
+                        <Check className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <textarea
+                      ref={textareaRef}
+                      value={body}
+                      onChange={(e) => setBody(e.target.value)}
+                      placeholder="Describe the issue... (Markdown supported)"
+                      className="w-full h-72 p-4 rounded-b-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
+                    <p className="text-xs text-zinc-500">
+                      Supports GitHub Flavored Markdown
+                    </p>
                   </div>
+                ) : (
+                  <div className="prose prose-sm dark:prose-invert prose-zinc max-w-none p-4 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 overflow-auto max-h-96">
+                    {issue.body ? (
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {issue.body}
+                      </ReactMarkdown>
+                    ) : (
+                      <p className="text-zinc-500 italic">No description provided.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
 
-                  {/* Search results */}
-                  {filteredLabels.length > 0 && (
-                    <div className="flex flex-wrap gap-2 p-2 rounded-lg bg-zinc-50 dark:bg-zinc-800/50">
-                      {filteredLabels.map((label) => (
-                        <button
+            {/* Sidebar */}
+            <div className="w-64 flex-shrink-0 space-y-6">
+              {/* Labels */}
+              <div>
+                <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100 mb-3">
+                  Labels
+                </h3>
+                {isEditing ? (
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap gap-2">
+                      {selectedLabels.map((labelName) => {
+                        const label = labels.find((l) => l.name === labelName);
+                        const isCategory = CATEGORY_LABEL_NAMES.includes(labelName);
+                        return (
+                          <button
+                            key={labelName}
+                            onClick={() => toggleLabel(labelName)}
+                            className={cn(
+                              "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium transition-all",
+                              isCategory && "ring-2 ring-offset-1"
+                            )}
+                            style={{
+                              backgroundColor: label ? `#${label.color}20` : "#71717a20",
+                              color: label ? `#${label.color}` : "#71717a",
+                              border: label ? `1px solid #${label.color}40` : "1px solid #71717a40",
+                            }}
+                          >
+                            {labelName}
+                            <X className="w-3 h-3" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="relative">
+                      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400" />
+                      <Input
+                        type="text"
+                        placeholder="Add labels..."
+                        value={labelSearch}
+                        onChange={(e) => setLabelSearch(e.target.value)}
+                        className="pl-8 h-8 text-xs"
+                      />
+                    </div>
+                    {filteredLabels.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5 p-2 rounded-lg bg-zinc-100 dark:bg-zinc-800">
+                        {filteredLabels.map((label) => (
+                          <button
+                            key={label.id}
+                            onClick={() => {
+                              toggleLabel(label.name);
+                              setLabelSearch("");
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium hover:ring-1 transition-all"
+                            style={{
+                              backgroundColor: `#${label.color}20`,
+                              color: `#${label.color}`,
+                              border: `1px solid #${label.color}40`,
+                            }}
+                          >
+                            <Plus className="w-3 h-3" />
+                            {label.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {issue.labels.length > 0 ? (
+                      issue.labels.map((label) => (
+                        <span
                           key={label.id}
-                          onClick={() => {
-                            toggleLabel(label.name);
-                            setLabelSearch("");
-                          }}
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium hover:ring-2 hover:ring-offset-1 transition-all"
+                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium"
                           style={{
                             backgroundColor: `#${label.color}20`,
                             color: `#${label.color}`,
                             border: `1px solid #${label.color}40`,
                           }}
                         >
-                          <Plus className="w-3 h-3" />
                           {label.name}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Category labels hint */}
-                  <p className="text-xs text-zinc-500">
-                    * Issue must have at least one category: medusa-backend, medusa-frontend, or strapi-cms
-                  </p>
-                </div>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {issue.labels.length > 0 ? (
-                    issue.labels.map((label) => (
-                      <span
-                        key={label.id}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium"
-                        style={{
-                          backgroundColor: `#${label.color}20`,
-                          color: `#${label.color}`,
-                          border: `1px solid #${label.color}40`,
-                        }}
-                      >
-                        {label.name}
-                      </span>
-                    ))
-                  ) : (
-                    <span className="text-sm text-zinc-500">No labels</span>
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="mb-4">
-              <h4 className="text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-                Description
-              </h4>
-              {isEditing ? (
-                <textarea
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  className="w-full h-64 p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm font-mono resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              ) : (
-                <div className="p-4 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 text-sm whitespace-pre-wrap max-h-96 overflow-y-auto">
-                  {issue.body || "No description provided."}
-                </div>
-              )}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-xs text-zinc-500">No labels</span>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
-          <DrawerFooter className="flex-row gap-2 px-0">
+          {/* Footer */}
+          <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
+            <Button
+              variant="outline"
+              onClick={handleToggleState}
+              disabled={isSaving}
+              size="sm"
+            >
+              {issue.state === "open" ? "Close issue" : "Reopen issue"}
+            </Button>
+
             {isEditing ? (
-              <>
+              <div className="flex gap-2">
                 <Button
                   variant="outline"
+                  size="sm"
                   onClick={() => {
                     setIsEditing(false);
                     setTitle(issue.title);
@@ -462,37 +612,28 @@ function IssueDrawer({
                     setSelectedLabels(issue.labels.map((l) => l.name));
                     setLabelSearch("");
                   }}
-                  className="flex-1"
                 >
                   Cancel
                 </Button>
                 <Button
                   onClick={handleSave}
                   disabled={isSaving}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700"
+                  size="sm"
+                  className="bg-green-600 hover:bg-green-700"
                 >
-                  {isSaving ? "Saving..." : "Save Changes"}
+                  {isSaving ? "Saving..." : "Save changes"}
                 </Button>
-              </>
+              </div>
             ) : (
-              <>
-                <Button
-                  variant="outline"
-                  onClick={handleToggleState}
-                  disabled={isSaving}
-                  className="flex-1"
-                >
-                  {issue.state === "open" ? "Close Issue" : "Reopen Issue"}
-                </Button>
-                <Button
-                  onClick={() => setIsEditing(true)}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700"
-                >
-                  Edit Issue
-                </Button>
-              </>
+              <Button
+                onClick={() => setIsEditing(true)}
+                size="sm"
+                className="bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
+              >
+                Edit issue
+              </Button>
             )}
-          </DrawerFooter>
+          </div>
         </div>
       </DrawerContent>
     </Drawer>
@@ -647,6 +788,7 @@ export default function IssuesPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<string>("all");
   const [filterState, setFilterState] = useState<FilterState>("all");
+  const [sortOption, setSortOption] = useState<SortOption>("newest");
   const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
   const [selectedIssue, setSelectedIssue] = useState<GitHubIssue | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
@@ -709,11 +851,26 @@ export default function IssuesPage() {
     return counts;
   }, [issues]);
 
-  // Get available filter labels and their counts for issues in current tab
+  // Get available filter labels and their counts based on current filters
   const availableFilters = useMemo(() => {
     const labelCounts: Record<string, { label: GitHubLabel; count: number }> = {};
     
-    for (const issue of issuesInTab) {
+    // Filter issues by current state and selected labels first
+    let filteredForCounts = issuesInTab;
+    
+    if (filterState !== "all") {
+      filteredForCounts = filteredForCounts.filter((i) => i.state === filterState);
+    }
+    
+    if (selectedFilters.length > 0) {
+      filteredForCounts = filteredForCounts.filter((issue) =>
+        selectedFilters.every((filterLabel) =>
+          issue.labels.some((l) => l.name === filterLabel)
+        )
+      );
+    }
+    
+    for (const issue of filteredForCounts) {
       for (const label of issue.labels) {
         // Skip category labels from filters
         if (CATEGORY_LABEL_NAMES.includes(label.name)) continue;
@@ -725,8 +882,11 @@ export default function IssuesPage() {
       }
     }
     
-    return Object.values(labelCounts).sort((a, b) => b.count - a.count);
-  }, [issuesInTab]);
+    // Filter out labels with 0 count (except currently selected ones)
+    return Object.values(labelCounts)
+      .filter(({ label, count }) => count > 0 || selectedFilters.includes(label.name))
+      .sort((a, b) => b.count - a.count);
+  }, [issuesInTab, filterState, selectedFilters]);
 
   // Apply all filters (state, search, selected labels with AND logic)
   const filteredIssues = useMemo(() => {
@@ -758,8 +918,28 @@ export default function IssuesPage() {
       );
     }
 
+    // Sort
+    result = [...result].sort((a, b) => {
+      switch (sortOption) {
+        case "newest":
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        case "oldest":
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        case "number-asc":
+          return a.number - b.number;
+        case "number-desc":
+          return b.number - a.number;
+        case "alpha-asc":
+          return a.title.localeCompare(b.title);
+        case "alpha-desc":
+          return b.title.localeCompare(a.title);
+        default:
+          return 0;
+      }
+    });
+
     return result;
-  }, [issuesInTab, filterState, selectedFilters, searchQuery]);
+  }, [issuesInTab, filterState, selectedFilters, searchQuery, sortOption]);
 
   const stats = useMemo(() => {
     const open = issuesInTab.filter((i) => i.state === "open").length;
@@ -799,7 +979,7 @@ export default function IssuesPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-                Issues
+                GitHub Issues
               </h1>
               <p className="text-sm text-zinc-500 dark:text-zinc-400">
                 mintpixels/grillers-documentation
@@ -833,7 +1013,7 @@ export default function IssuesPage() {
                 key={tab.id}
                 onClick={() => handleTabChange(tab.id)}
                 className={cn(
-                  "px-4 py-2 text-sm font-medium border-b-2 transition-all",
+                  "px-4 py-2 text-sm font-medium border-b-2 transition-all cursor-pointer",
                   activeTab === tab.id
                     ? "border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-100"
                     : "border-transparent text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
@@ -955,17 +1135,32 @@ export default function IssuesPage() {
 
           {/* Main Content */}
           <main className="flex-1 min-w-0">
-            {/* Search */}
+            {/* Search and Sort */}
             <div className="mb-6">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                <Input
-                  type="text"
-                  placeholder="Search issues..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 h-11"
-                />
+              <div className="flex gap-3">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                  <Input
+                    type="text"
+                    placeholder="Search issues..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-10 h-11"
+                  />
+                </div>
+                <Select value={sortOption} onValueChange={(value) => setSortOption(value as SortOption)}>
+                  <SelectTrigger className="w-[160px] h-[44px]">
+                    <SelectValue placeholder="Sort by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="newest">Newest first</SelectItem>
+                    <SelectItem value="oldest">Oldest first</SelectItem>
+                    <SelectItem value="number-desc"># High → Low</SelectItem>
+                    <SelectItem value="number-asc"># Low → High</SelectItem>
+                    <SelectItem value="alpha-asc">A → Z</SelectItem>
+                    <SelectItem value="alpha-desc">Z → A</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Active filters display */}
