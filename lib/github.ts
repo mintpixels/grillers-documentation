@@ -22,6 +22,15 @@ export interface GitHubUser {
   avatar_url: string;
 }
 
+export interface GitHubComment {
+  id: number;
+  body: string;
+  user: GitHubUser;
+  created_at: string;
+  updated_at: string;
+  html_url: string;
+}
+
 export interface GitHubIssue {
   id: number;
   number: number;
@@ -146,6 +155,44 @@ export async function getLabels(): Promise<GitHubLabel[]> {
 
   if (!response.ok) {
     throw new Error(`Failed to fetch labels: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+export async function getIssueComments(
+  issueNumber: number
+): Promise<GitHubComment[]> {
+  const response = await fetch(
+    `${BASE_URL}/issues/${issueNumber}/comments?per_page=100`,
+    {
+      headers,
+      next: { revalidate: 0 },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch comments: ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+export async function createComment(
+  issueNumber: number,
+  body: string
+): Promise<GitHubComment> {
+  const response = await fetch(
+    `${BASE_URL}/issues/${issueNumber}/comments`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ body }),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Failed to create comment: ${response.statusText}`);
   }
 
   return response.json();

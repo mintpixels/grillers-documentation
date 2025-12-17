@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "motion/react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -42,7 +43,11 @@ import {
   Link2,
   Heading2,
   Quote,
+  MessageSquare,
+  Send,
+  CalendarDays,
 } from "lucide-react";
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 
 interface GitHubLabel {
@@ -67,6 +72,15 @@ interface GitHubIssue {
   created_at: string;
   updated_at: string;
   user: GitHubUser;
+  html_url: string;
+}
+
+interface GitHubComment {
+  id: number;
+  body: string;
+  user: GitHubUser;
+  created_at: string;
+  updated_at: string;
   html_url: string;
 }
 
@@ -223,6 +237,10 @@ function IssueDrawer({
   const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
   const [labelSearch, setLabelSearch] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [comments, setComments] = useState<GitHubComment[]>([]);
+  const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const [newComment, setNewComment] = useState("");
+  const [isSubmittingComment, setIsSubmittingComment] = useState(false);
 
   useEffect(() => {
     if (issue) {
@@ -231,8 +249,47 @@ function IssueDrawer({
       setSelectedLabels(issue.labels.map((l) => l.name));
       setIsEditing(false);
       setLabelSearch("");
+      setNewComment("");
+      // Fetch comments
+      fetchComments(issue.number);
     }
   }, [issue]);
+
+  const fetchComments = async (issueNumber: number) => {
+    setIsLoadingComments(true);
+    try {
+      const response = await fetch(`/api/issues/${issueNumber}/comments`);
+      if (response.ok) {
+        const data = await response.json();
+        setComments(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch comments:", error);
+    } finally {
+      setIsLoadingComments(false);
+    }
+  };
+
+  const handleSubmitComment = async () => {
+    if (!issue || !newComment.trim()) return;
+    setIsSubmittingComment(true);
+    try {
+      const response = await fetch(`/api/issues/${issue.number}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: newComment }),
+      });
+      if (response.ok) {
+        const comment = await response.json();
+        setComments((prev) => [...prev, comment]);
+        setNewComment("");
+      }
+    } catch (error) {
+      console.error("Failed to submit comment:", error);
+    } finally {
+      setIsSubmittingComment(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!issue) return;
@@ -493,6 +550,77 @@ function IssueDrawer({
                     ) : (
                       <p className="text-zinc-500 italic">No description provided.</p>
                     )}
+                  </div>
+                )}
+              </div>
+
+              {/* Comments Section */}
+              <div className="mt-6">
+                <h3 className="text-sm font-medium text-zinc-900 dark:text-zinc-100 mb-4 flex items-center gap-2">
+                  <MessageSquare className="w-4 h-4" />
+                  Comments ({comments.length})
+                </h3>
+
+                {isLoadingComments ? (
+                  <div className="flex items-center justify-center py-8">
+                    <RefreshCw className="w-5 h-5 animate-spin text-zinc-400" />
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {comments.length === 0 ? (
+                      <p className="text-sm text-zinc-500 italic py-4">No comments yet.</p>
+                    ) : (
+                      comments.map((comment) => (
+                        <div
+                          key={comment.id}
+                          className="p-4 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700"
+                        >
+                          <div className="flex items-center gap-2 mb-2">
+                            <img
+                              src={comment.user.avatar_url}
+                              alt={comment.user.login}
+                              className="w-6 h-6 rounded-full"
+                            />
+                            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                              {comment.user.login}
+                            </span>
+                            <span className="text-xs text-zinc-500">
+                              {formatDate(comment.created_at)}
+                            </span>
+                          </div>
+                          <div className="prose prose-sm dark:prose-invert prose-zinc max-w-none">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                              {comment.body}
+                            </ReactMarkdown>
+                          </div>
+                        </div>
+                      ))
+                    )}
+
+                    {/* Add comment form */}
+                    <div className="pt-4 border-t border-zinc-200 dark:border-zinc-700">
+                      <textarea
+                        value={newComment}
+                        onChange={(e) => setNewComment(e.target.value)}
+                        placeholder="Add a comment..."
+                        className="w-full h-24 p-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <div className="flex justify-end mt-2">
+                        <Button
+                          onClick={handleSubmitComment}
+                          disabled={isSubmittingComment || !newComment.trim()}
+                          size="sm"
+                          className="flex items-center gap-2"
+                        >
+                          {isSubmittingComment ? (
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Send className="w-4 h-4" />
+                          )}
+                          Comment
+                        </Button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -780,19 +908,42 @@ function CreateIssueDrawer({
   );
 }
 
-export default function IssuesPage() {
+function IssuesPageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  
   const [issues, setIssues] = useState<GitHubIssue[]>([]);
   const [labels, setLabels] = useState<GitHubLabel[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<string>("all");
-  const [filterState, setFilterState] = useState<FilterState>("all");
-  const [sortOption, setSortOption] = useState<SortOption>("newest");
   const [selectedFilters, setSelectedFilters] = useState<string[]>([]);
   const [selectedIssue, setSelectedIssue] = useState<GitHubIssue | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+
+  // Read initial state from URL
+  const activeTab = searchParams.get("tab") || "all";
+  const filterState = (searchParams.get("status") as FilterState) || "all";
+  const sortOption = (searchParams.get("sort") as SortOption) || "newest";
+
+  // Update URL when filters change
+  const updateURL = useCallback((updates: Record<string, string | null>) => {
+    const params = new URLSearchParams(searchParams.toString());
+    Object.entries(updates).forEach(([key, value]) => {
+      if (value === null || value === "all" || (key === "sort" && value === "newest")) {
+        params.delete(key);
+      } else {
+        params.set(key, value);
+      }
+    });
+    const newURL = params.toString() ? `?${params.toString()}` : "/";
+    router.push(newURL, { scroll: false });
+  }, [searchParams, router]);
+
+  const setActiveTab = (tab: string) => updateURL({ tab });
+  const setFilterState = (status: FilterState) => updateURL({ status });
+  const setSortOption = (sort: SortOption) => updateURL({ sort });
 
   const fetchIssues = useCallback(async () => {
     setIsLoading(true);
@@ -996,6 +1147,15 @@ export default function IssuesPage() {
                   className={cn("w-4 h-4", isLoading && "animate-spin")}
                 />
               </Button>
+              <Link href="/plan">
+                <Button
+                  variant="outline"
+                  className="gap-2"
+                >
+                  <CalendarDays className="w-4 h-4" />
+                  Project Plan
+                </Button>
+              </Link>
               <Button
                 onClick={() => setIsCreateOpen(true)}
                 className="bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 hover:bg-zinc-800 dark:hover:bg-zinc-200"
@@ -1268,5 +1428,17 @@ export default function IssuesPage() {
         onCreate={fetchIssues}
       />
     </div>
+  );
+}
+
+export default function IssuesPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 flex items-center justify-center">
+        <RefreshCw className="w-8 h-8 animate-spin text-zinc-400" />
+      </div>
+    }>
+      <IssuesPageContent />
+    </Suspense>
   );
 }
