@@ -34,13 +34,17 @@ import { ChartContainer, ChartTooltip, ChartTooltipContent, type ChartConfig } f
 
 // Week configuration - weeks starting Monday
 const WEEKS = [
-  { id: "dec-01", label: "Dec 1", startDate: "2024-12-01", endDate: "2024-12-07" },
-  { id: "dec-08", label: "Dec 8", startDate: "2024-12-08", endDate: "2024-12-14" },
-  { id: "dec-15", label: "Dec 15", startDate: "2024-12-15", endDate: "2024-12-21" },
-  { id: "dec-22", label: "Dec 22", startDate: "2024-12-22", endDate: "2024-12-28" },
-  { id: "dec-29", label: "Dec 29", startDate: "2024-12-29", endDate: "2025-01-04" },
-  { id: "jan-05", label: "Jan 5", startDate: "2025-01-05", endDate: "2025-01-11" },
-  { id: "jan-12", label: "Jan 12", startDate: "2025-01-12", endDate: "2025-01-18" },
+  { id: "dec-01", label: "Dec 1", startDate: "2025-12-01", endDate: "2025-12-07" },
+  { id: "dec-08", label: "Dec 8", startDate: "2025-12-08", endDate: "2025-12-14" },
+  { id: "dec-15", label: "Dec 15", startDate: "2025-12-15", endDate: "2025-12-21" },
+  { id: "dec-22", label: "Dec 22", startDate: "2025-12-22", endDate: "2025-12-28" },
+  { id: "dec-29", label: "Dec 29", startDate: "2025-12-29", endDate: "2026-01-04" },
+  { id: "jan-05", label: "Jan 5", startDate: "2026-01-05", endDate: "2026-01-11" },
+  { id: "jan-12", label: "Jan 12", startDate: "2026-01-12", endDate: "2026-01-18" },
+  { id: "jan-19", label: "Jan 19", startDate: "2026-01-19", endDate: "2026-01-25" },
+  { id: "jan-26", label: "Jan 26", startDate: "2026-01-26", endDate: "2026-02-01" },
+  { id: "feb-02", label: "Feb 2", startDate: "2026-02-02", endDate: "2026-02-08" },
+  { id: "feb-09", label: "Feb 9", startDate: "2026-02-09", endDate: "2026-02-15" },
 ];
 
 // Each week column is 280px + 16px gap = 296px total
@@ -51,6 +55,9 @@ const CATEGORIES = [
   { id: "backend", label: "Backend", labelName: "medusa-backend", color: "#E11D48" },
   { id: "frontend", label: "Frontend", labelName: "medusa-frontend", color: "#0E8A16" },
   { id: "strapi", label: "Strapi", labelName: "strapi-cms", color: "#4945FF" },
+  { id: "quickbooks", label: "QuickBooks", labelName: "quickbooks-integration", color: "#6F42C1" },
+  { id: "docs", label: "Documentation", labelName: "documentation-docs", color: "#0075CA" },
+  { id: "testing", label: "Testing/QA", labelName: "testing-qa", color: "#5319E7" },
 ];
 
 // Placeholder data - will be replaced with real API data
@@ -229,6 +236,10 @@ const WEEKLY_ISSUES: Record<string, Array<{
     // Final polish and launch prep
     // Any remaining items or overflow
   ],
+  "jan-19": [],
+  "jan-26": [],
+  "feb-02": [],
+  "feb-09": [],
 };
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -251,7 +262,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 function CategoryProgressCard({ data }: { data: typeof CATEGORY_PROGRESS[0] }) {
-  const percentage = Math.round((data.completed / data.total) * 100);
+  const percentage = data.total > 0 ? Math.round((data.completed / data.total) * 100) : 0;
   const chartData = [{ name: data.name, value: percentage, fill: data.color }];
   
   const chartConfig = {
@@ -317,7 +328,7 @@ function PriorityPieChart({ data }: { data: typeof PRIORITY_BREAKDOWN }) {
   } satisfies ChartConfig;
   
   return (
-    <Card className="flex flex-col">
+    <Card className="flex flex-col h-full">
       <CardHeader className="items-center pb-0">
         <CardTitle className="text-sm font-medium">Issues by Priority</CardTitle>
         <CardDescription className="text-xs">{total} total issues</CardDescription>
@@ -392,27 +403,46 @@ function PriorityPieChart({ data }: { data: typeof PRIORITY_BREAKDOWN }) {
   );
 }
 
-function WeeklyProgressChart({ weeklyIssues }: { weeklyIssues: typeof WEEKLY_ISSUES }) {
+function WeeklyProgressChart({ githubIssues }: { githubIssues: any[] }) {
+  // Group closed issues by week based on closedAt date
+  const closedByWeek: Record<string, number> = {};
+  for (const week of WEEKS) {
+    closedByWeek[week.id] = 0;
+  }
+  
+  for (const issue of githubIssues) {
+    if (issue.state === 'closed' && issue.closed_at) {
+      const closedDate = new Date(issue.closed_at);
+      for (const week of WEEKS) {
+        const start = new Date(week.startDate);
+        const end = new Date(week.endDate);
+        end.setHours(23, 59, 59, 999);
+        if (closedDate >= start && closedDate <= end) {
+          closedByWeek[week.id]++;
+          break;
+        }
+      }
+    }
+  }
+
   const data = WEEKS.map((week) => ({
     name: week.label,
-    planned: weeklyIssues[week.id]?.length || 0,
-    completed: weeklyIssues[week.id]?.filter((i) => i.status === "closed").length || 0,
+    completed: closedByWeek[week.id] || 0,
   }));
 
   const chartConfig = {
-    planned: { label: "Planned", color: "#3b82f6" },
     completed: { label: "Completed", color: "#22c55e" },
   } satisfies ChartConfig;
 
   return (
-    <Card className="flex flex-col">
+    <Card className="flex flex-col h-full">
       <CardHeader className="items-center pb-0">
         <CardTitle className="text-sm font-medium">Weekly Delivery</CardTitle>
-        <CardDescription className="text-xs">Issues per week</CardDescription>
+        <CardDescription className="text-xs">Issues completed per week</CardDescription>
       </CardHeader>
-      <CardContent className="flex-1 pb-2">
-        <ChartContainer config={chartConfig} className="h-[160px] w-full">
-          <BarChart data={data} accessibilityLayer>
+      <CardContent className="flex-1 pb-2 flex flex-col justify-center">
+        <ChartContainer config={chartConfig} className="h-[180px] w-full">
+          <BarChart data={data} accessibilityLayer barGap={0} barCategoryGap="20%">
             <XAxis
               dataKey="name"
               tickLine={false}
@@ -422,15 +452,10 @@ function WeeklyProgressChart({ weeklyIssues }: { weeklyIssues: typeof WEEKLY_ISS
             />
             <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 10 }} width={25} />
             <ChartTooltip content={<ChartTooltipContent />} />
-            <Bar dataKey="planned" fill="var(--color-planned)" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="completed" fill="var(--color-completed)" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="completed" fill="var(--color-completed)" radius={[4, 4, 0, 0]} maxBarSize={60} />
           </BarChart>
         </ChartContainer>
         <div className="flex justify-center gap-4 text-xs">
-          <div className="flex items-center gap-1">
-            <span className="w-2 h-2 rounded-full bg-blue-500" />
-            <span className="text-muted-foreground">Planned</span>
-          </div>
           <div className="flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-green-500" />
             <span className="text-muted-foreground">Completed</span>
@@ -579,6 +604,8 @@ export default function ProjectPlanPage() {
   const [containerWidth, setContainerWidth] = useState(0);
   const [weeklyIssues, setWeeklyIssues] = useState<typeof WEEKLY_ISSUES>(WEEKLY_ISSUES);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [categoryStats, setCategoryStats] = useState<Record<string, { completed: number; total: number }>>({});
+  const [githubIssues, setGithubIssues] = useState<any[]>([]);
   
   // Show exactly 3 weeks at a time
   const VISIBLE_WEEKS = 3;
@@ -617,6 +644,25 @@ export default function ProjectPlanPage() {
         }
         return next;
       });
+      
+      // Compute category stats from GitHub issues
+      const stats: Record<string, { completed: number; total: number }> = {};
+      for (const cat of CATEGORIES) {
+        stats[cat.id] = { completed: 0, total: 0 };
+      }
+      for (const issue of issues) {
+        const labels = issue.labels?.map((l: any) => l.name) || [];
+        for (const cat of CATEGORIES) {
+          if (labels.includes(cat.labelName)) {
+            stats[cat.id].total += 1;
+            if (issue.state === 'closed') {
+              stats[cat.id].completed += 1;
+            }
+          }
+        }
+      }
+      setCategoryStats(stats);
+      setGithubIssues(issues);
     } catch (e) {
       console.error('Failed to refresh issues', e);
     } finally {
@@ -625,8 +671,8 @@ export default function ProjectPlanPage() {
   };
   useEffect(() => { void refreshFromGitHub(); }, []);
   
-  // Determine current week (dec-08 for demo)
-  const currentWeekId = "dec-08";
+  // Determine current week based on today's date
+  const currentWeekId = "jan-19"; // Week of Jan 19-25, 2026
 
   // Derive dynamic progress from scheduled issues
   const totals = Object.values(weeklyIssues).flat();
@@ -652,7 +698,7 @@ export default function ProjectPlanPage() {
                   Project Plan
                 </h1>
                 <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                  Grillers Pride • December 2024
+                  Grillers Pride • Dec 2025 – Feb 2026
                 </p>
               </div>
             </div>
@@ -675,47 +721,51 @@ export default function ProjectPlanPage() {
       </header>
 
       <div className="max-w-[1600px] mx-auto px-4 py-6">
-        {/* Progress Charts Section */}
-        <section className="mb-8">
-          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-4 flex items-center gap-2">
-            <Clock className="w-5 h-5" />
-            Progress by Category
-          </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
-            {(() => {
-              const byCategory: Record<string, { name: string; color: string; completed: number; total: number }>= {};
-              for (const c of CATEGORIES) {
-                byCategory[c.id] = { name: c.label, color: c.color, completed: 0, total: 0 };
-              }
-              for (const item of totals) {
-                const key = item.category;
-                if (byCategory[key]) {
-                  byCategory[key].total += 1;
-                  if (item.status === 'closed') byCategory[key].completed += 1;
+        {/* Weekly Delivery & Priority Row */}
+        <section className="mb-6">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2">
+              <WeeklyProgressChart githubIssues={githubIssues} />
+            </div>
+            <div className="lg:col-span-1">
+              {(() => {
+                const counts: Record<string, number> = { Critical: 0, High: 0, Medium: 0, Low: 0 };
+                for (const it of totals) {
+                  const p = it.priority?.toLowerCase() || 'low';
+                  if (p.startsWith('crit')) counts['Critical'] += 1;
+                  else if (p.startsWith('high')) counts['High'] += 1;
+                  else if (p.startsWith('med')) counts['Medium'] += 1;
+                  else counts['Low'] += 1;
                 }
-              }
-              return Object.values(byCategory).map((cat) => (
-                <CategoryProgressCard key={cat.name} data={cat as any} />
-              ));
-            })()}
-            {(() => {
-              const counts: Record<string, number> = { Critical: 0, High: 0, Medium: 0, Low: 0 };
-              for (const it of totals) {
-                const p = it.priority?.toLowerCase() || 'low';
-                if (p.startsWith('crit')) counts['Critical'] += 1;
-                else if (p.startsWith('high')) counts['High'] += 1;
-                else if (p.startsWith('med')) counts['Medium'] += 1;
-                else counts['Low'] += 1;
-              }
-              const data = [
-                { name: 'Critical', value: counts['Critical'], color: '#B60205' },
-                { name: 'High', value: counts['High'], color: '#D93F0B' },
-                { name: 'Medium', value: counts['Medium'], color: '#FBCA04' },
-                { name: 'Low', value: counts['Low'], color: '#C2E0C6' },
-              ];
-              return (<PriorityPieChart data={data as any} />);
-            })()}
-            <WeeklyProgressChart weeklyIssues={weeklyIssues} />
+                const data = [
+                  { name: 'Critical', value: counts['Critical'], color: '#B60205' },
+                  { name: 'High', value: counts['High'], color: '#D93F0B' },
+                  { name: 'Medium', value: counts['Medium'], color: '#FBCA04' },
+                  { name: 'Low', value: counts['Low'], color: '#C2E0C6' },
+                ];
+                return (<PriorityPieChart data={data as any} />);
+              })()}
+            </div>
+          </div>
+        </section>
+
+        {/* Progress by Category Section */}
+        <section className="mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+            {CATEGORIES.map((cat) => {
+              const stats = categoryStats[cat.id] || { completed: 0, total: 0 };
+              return (
+                <CategoryProgressCard
+                  key={cat.id}
+                  data={{
+                    name: cat.label,
+                    color: cat.color,
+                    completed: stats.completed,
+                    total: stats.total,
+                  }}
+                />
+              );
+            })}
           </div>
         </section>
 

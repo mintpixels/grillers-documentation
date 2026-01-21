@@ -40,6 +40,7 @@ export interface GitHubIssue {
   labels: GitHubLabel[];
   created_at: string;
   updated_at: string;
+  closed_at: string | null;
   user: GitHubUser;
   html_url: string;
 }

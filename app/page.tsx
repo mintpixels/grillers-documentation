@@ -93,9 +93,12 @@ const CATEGORY_TABS = [
   { id: "backend", label: "Backend", labelName: "medusa-backend" },
   { id: "frontend", label: "Frontend", labelName: "medusa-frontend" },
   { id: "strapi", label: "Strapi", labelName: "strapi-cms" },
+  { id: "quickbooks", label: "QuickBooks", labelName: "quickbooks-integration" },
+  { id: "docs", label: "Documentation", labelName: "documentation-docs" },
+  { id: "testing", label: "Testing/QA", labelName: "testing-qa" },
 ] as const;
 
-const CATEGORY_LABEL_NAMES = ["medusa-backend", "medusa-frontend", "strapi-cms"];
+const CATEGORY_LABEL_NAMES = ["medusa-backend", "medusa-frontend", "strapi-cms", "quickbooks-integration", "documentation-docs", "testing-qa"];
 
 const PRIORITY_COLORS: Record<string, string> = {
   critical: "bg-red-500",
